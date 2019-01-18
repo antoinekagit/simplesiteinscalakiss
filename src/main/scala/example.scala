@@ -3,47 +3,54 @@ import simplehtmlwriterinscala.Html5._
 import simplehtmlwriterinscala.Html5.Attr._
 import simplehtmlwriterinscala.Implicits._
 
-import SimpleSiteInScalaKISS.{ ssiskpage, ssiskresource, makeSite }
+import simplesiteinscalakiss.{ Config, Site, Page }
 
 object Example {
 
   def main (args:Array[String]) :Unit = {
 
-    println("Running Example.");
+    println("Running Example.")
 
-    makeSite(Map(
-      "/index.html" -> seq(
-        a(
-          ssiskpage("href") := "/sous-dossier/page.html"
-        )("page dans un sous dossier"),
+    implicit val config = new Config // default config
+
+    Site.make(Set(
+      new Page("/index.html") { val node = seq(
+        a(href := ssisk.linkpage("/sous-dossier/page.html"))(
+          "page dans un sous dossier"),
         br(),
-        a(
-          ssiskpage("href") := "sous-dossier/sous-dossier/page.html"
-        )("page dans un sous-dossier dans un sous-dossier"),
+        a(href := ssisk.linkpage("sous-dossier/sous-dossier/page.html"))(
+          "page dans un sous-dossier dans un sous-dossier"),
         br(),
-        a(ssiskresource("href") := "pdf/rien.pdf")("resource pdf vide de contenu"),
+        a(href := ssisk.linkresource("pdf/rien.pdf"))(
+          "resource pdf vide de contenu"),
         br(),
         img(
-          ssiskresource("src") := "jpg/spider-cat.jpg",
+          src := ssisk.linkresource("jpg/spider-cat.jpg"),
           alt := "kitty image found at https://kittybloger.files.wordpress.com")
-      ),
-      "/sous-dossier/page.html" -> seq(
+      )},
+      new Page("/sous-dossier/page.html") { val node = seq(
         h1("page dans un sous-dossier"),
-        a(ssiskpage("href") := "../index.html")("niveau au dessus"),
+        a(href := ssisk.linkpage("../index.html"))(
+          "niveau au dessus"),
         br(),
-        a(ssiskpage("href") := "sous-dossier/page.html")("niveau en dessous"),
+        a(href := ssisk.linkpage("sous-dossier/page.html"))(
+          "niveau en dessous"),
         br(),
-        a(ssiskresource("href") := "../pdf/rien.pdf")("resource pdf vide de contenu")
-      ),
-      "/sous-dossier/sous-dossier/page.html" -> seq(
-        span("ça commence à faire beaucoup de niveaux.."),
+        a(href := ssisk.linkresource("/pdf/rien.pdf"))(
+          "resource pdf vide de contenu")
+      )},
+      new Page("/sous-dossier/sous-dossier/page.html") { val node = seq(
+        span("ca commence a faire beaucoup de niveaux.."),
         br(),
-        a(ssiskpage("href") := "/index.html")("retour à l'accueil"),
+        a(href := ssisk.linkpage("/index.html"))(
+          "retour a l'accueil"),
         br(),
-        a(ssiskpage("href") := "../page.html")("retour au niveau - 1"),
+        a(href := ssisk.linkpage("../page.html"))(
+          "retour au niveau - 1"),
         br(),
-        a(ssiskresource("href") := "/pdf/rien.pdf")("resource pdf vide de contenu")
-      )
+        a(href := ssisk.linkresource("texte.txt"))(
+          "texte contenant du texte")
+      )}
     ))
 
   }
