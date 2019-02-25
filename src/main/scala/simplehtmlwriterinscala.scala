@@ -2,83 +2,128 @@ import scala.language.implicitConversions
 
 package simplehtmlwriterinscala {
 
-  // Here are classes for building basic html nodes
   object Basic {
 
-    trait AbsNode // common trait of html nodes
-    trait AbsAttr // common trait of html attributes
-
-    // a String attribute
-    case class AttrStr (name:String, value:String) extends AbsAttr {
+    case class Attr (
+      val name :String,
+      val value :String
+    ) {
       override def toString = "%s=\"%s\"" format (name, value)
     }
-    // a list of string attribute (for ex: 'class' attribute)
-    case class AttrListStr (name:String, values:Seq[String]) extends AbsAttr {
-      override def toString = "%s=\"%s\"" format (name, values mkString " ")
+
+    trait TNode 
+
+    case class Node (
+      val tag :String,
+      var attrs :Seq[Attr],
+      var childs :Seq[TNode]
+    ) extends TNode {
+
+      override def toString = {
+        val attStr =
+          if (attrs.isEmpty) ""
+          else attrs mkString (" ", " ", " ")
+        s"<$tag$attStr>${childs.mkString}</$tag>"
+      }
     }
 
-    // a basic 'block' node
-    case class Node (tag:String, attrs:Seq[AbsAttr], childs:Seq[AbsNode])
-        extends AbsNode {
-      override def toString = {
-        val attStr = if (attrs.isEmpty) "" else attrs mkString (" ", " ", " ")
-        s"<$tag$attStr>${childs.mkString}</$tag>" }
-    }
+    case class Leaf (
+      val tag :String,
+      val attrs :Seq[Attr]
+    ) extends TNode {
 
-    // a basic 'autoclosing' node (no childrens)
-    case class Leaf (tag:String, attrs:Seq[AbsAttr]) extends AbsNode {
       override def toString = {
-        val attStr = if (attrs.isEmpty) "" else attrs mkString (" ", " ", " ")
+        val attStr =
+          if (attrs.isEmpty) ""
+          else attrs mkString (" ", " ", " ")
         s"<$tag$attStr/>" }
     }
 
-    // a collection of nodes, no wrapper node printed
-    case class SeqNode (childs:Seq[AbsNode]) extends AbsNode {
-      override def toString = childs.mkString
-    }
-
-    // a string data, no wrapper node printed
-    case class StrData (strData:String) extends AbsNode {
+    case class StrDataNode (strData:String) extends TNode {
       override def toString = strData
     }
 
-    // an empty node, nothing printed
-    object EmptyNode extends AbsNode {
+    case class VirtualSeqNode (childs:Seq[TNode]) extends TNode {
+      override def toString = childs.mkString
+    }
+
+    case object EmptyNode extends TNode {
       override def toString = ""
     }
-  }
 
 
-  // Here are some classes builded on Basic ones
-  // They provide a less strict API, they are used by Html5 object (see below)
-  // for ex you don't have to write 'Seq()' when attributes are empty
-  object LessStrict {
-
-    import Basic._
-
-    // for attributes
-    case class AttrStrBuilder (name:String) {
-      def apply (value:String) = AttrStr(name, value)
-      def := = apply _
-    }
-    case class AttrListStrBuilder (name:String) {
-      def apply (value:String) = AttrListStr(name, Seq(value))
-      def apply (values:String*) = AttrListStr(name, values)
-      def := = apply _
+    case class AttrMaker (attrMaker:String=>Attr) {
+      def apply (value:String) = attrMaker (value)
+      def := (value:String) = attrMaker (value)
     }
 
-    // for nodes
-    case class NodeBuilder (tag:String) {
-      def apply (childs:AbsNode*) = Node(tag, Nil, childs)
-      def apply (attr:AbsAttr, attrs:AbsAttr*) (childs:AbsNode*) =
-        Node(tag, attr +: attrs, childs)
+    case class NodeMaker (nodeMaker :Seq[Attr]=>Seq[TNode]=>Node) {
+      case class ChildsMaker (attrs:Seq[Attr]) {
+        def apply (childs:Seq[TNode]) = nodeMaker (attrs) (childs)
+        def apply (first:TNode, childs:TNode*) =
+          nodeMaker (attrs) (first +: childs)
+        def apply () = nodeMaker (attrs) (Seq.empty)
+      }
+      def apply (first:Attr, attrs:Attr*) = ChildsMaker (first +: attrs)
+      def apply (attrs:Seq[Attr]) = ChildsMaker (attrs)
+      def apply = ChildsMaker (Seq.empty)
     }
-    case class LeafBuilder (tag:String) {
-      def apply (attrs:AbsAttr*) = Leaf(tag, attrs)
+
+    case class LeafMaker (leafMaker :Seq[Attr]=>Leaf) {
+      def apply (first:Attr, attrs:Attr*) = leafMaker (first +: attrs)
+      def apply (attrs:Seq[Attr]) = leafMaker (attrs)
+      def apply () = leafMaker (Seq.empty)
     }
-    case class SeqNodeBuilder () {
-      def apply (childs:AbsNode*) = SeqNode(childs)
+
+    object VirtualSeqMaker {
+      def apply (first:TNode, childs:TNode*) = VirtualSeqNode (first +: childs)
+      def apply (childs:Seq[TNode]) = VirtualSeqNode (childs)
+      def apply () = VirtualSeqNode (Seq.empty)
     }
+
+    object AttrMakerSimple {
+      def apply (name:String) = AttrMaker { value => Attr (name, value) }
+    }
+
+    object NodeMakerSimple {
+      def apply (tag:String) = NodeMaker { attrs => childs =>
+        Node (tag, attrs, childs)
+      }
+    }
+
+    object LeafMakerSimple {
+      def apply (tag:String) = LeafMaker { attrs => Leaf (tag, attrs) }
+    }
+
+    lazy val id = AttrMakerSimple("id")
+
+    lazy val body = NodeMakerSimple("body")
+
+    lazy val br = LeafMakerSimple("br")
+
+    lazy val seq = VirtualSeqMaker
+    lazy val empty = EmptyNode
+
+    val n = br(Seq.empty)
+    val a = Attr("id", "bob")
+
+    val l = Seq(
+      body(Seq(a, a))(Seq(n, n)),
+      body(Seq(a, a))(n, n),
+      body(a, a)(Seq(n, n)),
+      body(a, a)(n, n),
+      body(Seq(n, n)),
+      body(n, n),
+      body(),
+
+      br(Seq(a, a)),
+      br(a, a),
+      br(),
+
+      id("toto"),
+      id := "toto"
+    )
+
   }
 
   // Here are two implicits conversion methods
@@ -86,64 +131,70 @@ package simplehtmlwriterinscala {
   object Implicits {
     import Basic._
     // conversion from string to string data (see Basic above)
-    implicit def string_to_AbsNode (str:String) = StrData(str)
+    implicit def string_to_StrDataNode (str:String) = StrDataNode (str)
     // conversion from sequence to seq node (see Basic above)
-    implicit def seq_to_AbsNode (sn:Seq[AbsNode]) = SeqNode(sn)
-    implicit def mutiter_to_AbsNode [X<:AbsNode] (in:scala.collection.mutable.Iterable[X]) :SeqNode = SeqNode(in.toSeq)
+    implicit def seq_to_VirtualSeqNode (sn:Seq[TNode]) = VirtualSeqNode(sn)
+    implicit def mutiter_to_AbsNode [X<:TNode]
+      (in:scala.collection.mutable.Iterable[X]) :VirtualSeqNode =
+      VirtualSeqNode(in.toSeq)
   }
 
   // Here are a collection of methods to build HTML5 nodes and attributes
   // You can update it or create your own, the model is simple
   object Html5 {
 
-    import LessStrict._
+    import Basic.{
+      AttrMaker, AttrMakerSimple, NodeMakerSimple, LeafMakerSimple }
 
     // attributes in a separate object because these names are common
-    object Attr {
-      lazy val alt = AttrStrBuilder("alt")
-      lazy val id = AttrStrBuilder("id")
-      lazy val charset = AttrStrBuilder("charset")
-      lazy val classes = AttrListStrBuilder("class")
-      lazy val href = AttrStrBuilder("href")
-      lazy val rel = AttrStrBuilder("rel")
-      lazy val src = AttrStrBuilder("src")
-      lazy val titleAttr = AttrStrBuilder("title")
-      def data (name:String) = AttrStrBuilder("data-" + name)
+    object Attrs {
+      lazy val alt = AttrMakerSimple("alt")
+      lazy val id = AttrMakerSimple("id")
+      lazy val charset = AttrMakerSimple("charset")
+      lazy val classes = AttrMakerSimple("class")
+      lazy val href = AttrMakerSimple("href")
+      lazy val rel = AttrMakerSimple("rel")
+      lazy val src = AttrMakerSimple("src")
+      lazy val titleAttr = AttrMakerSimple("title")
+      def dataAttr (name:String) = AttrMaker { value =>
+        Basic.Attr ("data-name", value) }
     }
 
     // 'block' nodes
-    lazy val a = NodeBuilder("a")
-    lazy val body = NodeBuilder("body")
-    lazy val div = NodeBuilder("div")
-    lazy val footer = NodeBuilder("footer")
-    lazy val h1 = NodeBuilder("h1")
-    lazy val h2 = NodeBuilder("h2")
-    lazy val h3 = NodeBuilder("h3")
-    lazy val h4 = NodeBuilder("h4")
-    lazy val h5 = NodeBuilder("h5")
-    lazy val h6 = NodeBuilder("h6")
-    lazy val head = NodeBuilder("head")
-    lazy val html = NodeBuilder("html")
-    lazy val i = NodeBuilder("i")
-    lazy val li = NodeBuilder("li")
-    lazy val p = NodeBuilder("p")
-    lazy val pre = NodeBuilder("pre")
-    lazy val section = NodeBuilder("section")
-    lazy val span = NodeBuilder("span")
-    lazy val strong = NodeBuilder("strong")
-    lazy val style = NodeBuilder("style")
-    lazy val title = NodeBuilder("title")
-    lazy val ul = NodeBuilder("ul")
+    lazy val a = NodeMakerSimple("a")
+    lazy val body = NodeMakerSimple("body")
+    lazy val div = NodeMakerSimple("div")
+    lazy val footer = NodeMakerSimple("footer")
+    lazy val h1 = NodeMakerSimple("h1")
+    lazy val h2 = NodeMakerSimple("h2")
+    lazy val h3 = NodeMakerSimple("h3")
+    lazy val h4 = NodeMakerSimple("h4")
+    lazy val h5 = NodeMakerSimple("h5")
+    lazy val h6 = NodeMakerSimple("h6")
+    lazy val head = NodeMakerSimple("head")
+    lazy val html = NodeMakerSimple("html")
+    lazy val i = NodeMakerSimple("i")
+    lazy val li = NodeMakerSimple("li")
+    lazy val ol = NodeMakerSimple("ol")
+    lazy val p = NodeMakerSimple("p")
+    lazy val pre = NodeMakerSimple("pre")
+    lazy val section = NodeMakerSimple("section")
+    lazy val span = NodeMakerSimple("span")
+    lazy val strong = NodeMakerSimple("strong")
+    lazy val style = NodeMakerSimple("style")
+    lazy val sup = NodeMakerSimple("sup")
+    lazy val table = NodeMakerSimple("table")
+    lazy val td = NodeMakerSimple("td")
+    lazy val title = NodeMakerSimple("title")
+    lazy val th = NodeMakerSimple("th")
+    lazy val tr = NodeMakerSimple("tr")
+    lazy val ul = NodeMakerSimple("ul")
 
     // 'auto-closing' nodes
-    lazy val base = LeafBuilder("base")
-    lazy val br = LeafBuilder("br")
-    lazy val img = LeafBuilder("img")
-    lazy val link = LeafBuilder("link")
-    lazy val meta = LeafBuilder("meta")
-
-    // the two special nodes
-    lazy val empty = Basic.EmptyNode
-    lazy val seq = SeqNodeBuilder()
+    lazy val base = LeafMakerSimple("base")
+    lazy val br = LeafMakerSimple("br")
+    lazy val img = LeafMakerSimple("img")
+    lazy val link = LeafMakerSimple("link")
+    lazy val meta = LeafMakerSimple("meta")
   }
 }

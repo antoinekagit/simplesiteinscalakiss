@@ -1,6 +1,4 @@
-import simplehtmlwriterinscala.Basic.{
-  AbsNode, AbsAttr, AttrStr, Node, Leaf, SeqNode, StrData, EmptyNode }
-import simplehtmlwriterinscala.LessStrict.AttrStrBuilder
+import simplehtmlwriterinscala.Basic.{ TNode, NodeMaker, Attr, Node }
 
 import java.io.{File, PrintWriter}
 import java.nio.file.{ Path, Paths, Files, FileAlreadyExistsException,
@@ -11,59 +9,75 @@ import scala.collection.mutable.{ Set => MutableSet }
 
 package simplesiteinscalakiss {
 
+  case class Context (
+    val currentDir :Path,
+    val config :Config
+  ){
+
+    def linkPage (strPathPage:String) :String =
+      if (Paths.get(strPathPage).isAbsolute) {
+        Paths.get(
+          "./",
+          currentDir.relativize(Paths.get("/")).toString,
+          strPathPage).normalize.toString }
+      else {
+        val pathPage = currentDir.resolve(Paths.get(strPathPage)).normalize
+        currentDir.relativize(pathPage).normalize.toString
+      }
+
+    def linkResource (strPathResource:String) :String =
+      if (Paths.get(strPathResource).isAbsolute) {
+        Paths.get(
+          "./",
+          currentDir.relativize(Paths.get("/")).toString,
+          config.dirTargetResources,
+          strPathResource).normalize.toString }
+      else {
+        val pathResource = Paths.get(strPathResource)
+        Paths.get(
+          currentDir.relativize(Paths.get("/")).toString,
+          config.dirTargetResources,
+          currentDir.toString,
+          pathResource.toString).normalize.toString
+      }
+  }
+
   class Config (
+    // where is the resource folder in sbt
     val dirResources :String = "src/main/resources/ssisk",
+    // where to write the site
     val dirTarget :String = "target/ssisk/",
+    // where to write the resources in the site
     val dirTargetResources :String = "resources/"
   )
 
-  class Ssisk (val pwd:Path) (implicit config:Config) {
+  abstract class Page (val pagePathStr:String) (implicit config:Config){
+    val pagePath = Paths.get(pagePathStr)
 
-    def linkpage (strPathPage:String) :String = {
-      val pathPage = pwd.resolve(Paths.get(strPathPage)).normalize
-      pwd.relativize(pathPage).toString
-    }
-
-    def linkresource (strPathResource:String) :String = {
-      val pathResource = Paths.get(strPathResource)
-      if (pathResource.isAbsolute) {
-        Paths.get(
-          pwd.relativize(Paths.get("/")).toString,
-          config.dirTargetResources,
-          pathResource.toString).toString
-      }
-      else {
-        Paths.get(
-          pwd.relativize(Paths.get("/")).toString,
-          config.dirTargetResources,
-          pwd.toString,
-          pathResource.toString).toString
-      }
-    }
-  }
-
-  abstract class Page (val strPath:String) (implicit config:Config) {
-    val path = Paths.get(strPath)
-    if (! path.isAbsolute) new Exception("the page path must be absolute")
-    if (strPath.startsWith(config.dirTargetResources))
+    if (! pagePath.isAbsolute) new Exception("page path must be absolute")
+    if (pagePathStr.startsWith(config.dirTargetResources))
       new Exception("resources folder is restricted to resources")
 
-    implicit val ssisk = new Ssisk (path.getParent)
-    val node:AbsNode
+    val ctxt = Context(pagePath.getParent, config)
+
+    def linkPage (pagePathStr:String) = ctxt.linkPage(pagePathStr)
+    def linkResource (resPathStr:String) = ctxt.linkResource(resPathStr)
+
+    val node :TNode
   }
 
   object Site {
 
-    def make (pages :Set[Page]) (implicit config:Config) {
+    def make (config:Config, pages :Set[Page]) {
 
       import FilesUtil._
 
-      val pagesPaths = pages.map { page => page.path.toString }
+      val pagesPaths = pages.map { page => page.pagePath.toString }
 
       mkdir(config.dirTarget)
 
       pages.foreach { page =>
-        val path = Paths.get(config.dirTarget, page.path.toString)
+        val path = Paths.get(config.dirTarget, page.pagePath.toString)
         val content = "<!DOCTYPE html>" + page.node.toString
         writeFile (path, content)
       }

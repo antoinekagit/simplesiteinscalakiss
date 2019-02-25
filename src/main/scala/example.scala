@@ -1,6 +1,6 @@
-import simplehtmlwriterinscala.Basic.AbsNode
+import simplehtmlwriterinscala.Basic.seq
 import simplehtmlwriterinscala.Html5._
-import simplehtmlwriterinscala.Html5.Attr._
+import simplehtmlwriterinscala.Html5.Attrs._
 import simplehtmlwriterinscala.Implicits._
 
 import simplesiteinscalakiss.{ Config, Site, Page }
@@ -13,42 +13,42 @@ object Example {
 
     implicit val config = new Config // default config
 
-    Site.make(Set(
+    Site.make(config, Set(
       new Page("/index.html") { val node = seq(
-        a(href := ssisk.linkpage("/sous-dossier/page.html"))(
+        a(href := linkPage("/sous-dossier/page.html"))(
           "page dans un sous dossier"),
         br(),
-        a(href := ssisk.linkpage("sous-dossier/sous-dossier/page.html"))(
+        a(href := linkPage("sous-dossier/sous-dossier/page.html"))(
           "page dans un sous-dossier dans un sous-dossier"),
         br(),
-        a(href := ssisk.linkresource("pdf/rien.pdf"))(
+        a(href := linkResource("pdf/rien.pdf"))(
           "resource pdf vide de contenu"),
         br(),
         img(
-          src := ssisk.linkresource("jpg/spider-cat.jpg"),
+          src := linkResource("jpg/spider-cat.jpg"),
           alt := "kitty image found at https://kittybloger.files.wordpress.com")
       )},
       new Page("/sous-dossier/page.html") { val node = seq(
         h1("page dans un sous-dossier"),
-        a(href := ssisk.linkpage("../index.html"))(
+        a(href := linkPage("../index.html"))(
           "niveau au dessus"),
         br(),
-        a(href := ssisk.linkpage("sous-dossier/page.html"))(
+        a(href := linkPage("sous-dossier/page.html"))(
           "niveau en dessous"),
         br(),
-        a(href := ssisk.linkresource("/pdf/rien.pdf"))(
+        a(href := linkResource("/pdf/rien.pdf"))(
           "resource pdf vide de contenu")
       )},
       new Page("/sous-dossier/sous-dossier/page.html") { val node = seq(
         span("ca commence a faire beaucoup de niveaux.."),
         br(),
-        a(href := ssisk.linkpage("/index.html"))(
+        a(href := linkPage("/index.html"))(
           "retour a l'accueil"),
         br(),
-        a(href := ssisk.linkpage("../page.html"))(
+        a(href := linkPage("../page.html"))(
           "retour au niveau - 1"),
         br(),
-        a(href := ssisk.linkresource("texte.txt"))(
+        a(href := linkResource("texte.txt"))(
           "texte contenant du texte")
       )}
     ))
